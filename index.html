@@ -172,50 +172,102 @@ async function salvarContagem(){
  await historico();
 }
 
+
 async function historico(){
  const area=document.getElementById('historico');
 
  const {data,error}=await db.from('count_entries')
- .select('product_id,counted_qty,note,created_at,products(code,description)')
+ .select('id,product_id,counted_qty,note,created_at,products(code,description)')
  .eq('user_id',usuarioAtual.id)
  .order('created_at',{ascending:false});
 
  if(error){
- area.textContent='Erro: '+error.message;
- return;
+  area.textContent='Erro: '+error.message;
+  return;
  }
 
  if(!data.length){
- area.textContent='Nenhuma contagem registrada.';
- return;
+  area.textContent='Nenhuma contagem registrada.';
+  return;
  }
 
  const grupos={};
 
  data.forEach(c=>{
- const id=c.product_id;
+  const id=c.product_id;
 
- if(!grupos[id]){
- grupos[id]={
- code:c.products?.code,
- description:c.products?.description,
- total:0,
- passagens:0
- };
- }
+  if(!grupos[id]){
+   grupos[id]={
+    code:c.products?.code,
+    description:c.products?.description,
+    total:0,
+    passagens:[]
+   };
+  }
 
- grupos[id].total+=Number(c.counted_qty);
- grupos[id].passagens++;
+  grupos[id].total+=Number(c.counted_qty);
+  grupos[id].passagens.push(c);
  });
 
  area.innerHTML=Object.values(grupos).map(p=>
- `<div class="item">
- <b>${escapar(p.code)}</b> - ${escapar(p.description)}
- <br><b>Total acumulado: ${p.total}</b>
- <br><span class="small">${p.passagens} passagem(ns)</span>
- </div>`
+  `<div class="item">
+   <b>${escapar(p.code)}</b> - ${escapar(p.description)}
+   <br><b>Total acumulado: ${p.total}</b>
+   <br><span class="small">${p.passagens.length} passagem(ns)</span>
+   ${p.passagens.map(c=>`
+    <div style="border-top:1px solid #ccc;margin-top:8px;padding-top:8px">
+     Quantidade: <b>${c.counted_qty}</b>
+     <br><span class="small">${new Date(c.created_at).toLocaleString('pt-BR')}</span>
+     <br>
+     <button onclick="editarContagem(${c.id},${Number(c.counted_qty)})">Editar</button>
+     <button onclick="excluirContagem(${c.id})">Excluir</button>
+    </div>
+   `).join('')}
+  </div>`
  ).join('');
 }
+
+async function editarContagem(id,quantidadeAtual){
+ const nova=prompt('Digite a nova quantidade:',quantidadeAtual);
+
+ if(nova===null)return;
+
+ if(nova.trim()==='' || !Number.isFinite(Number(nova)) || Number(nova)<0){
+  alert('Digite uma quantidade válida.');
+  return;
+ }
+
+ const {error}=await db.from('count_entries')
+ .update({counted_qty:Number(nova)})
+ .eq('id',id)
+ .eq('user_id',usuarioAtual.id);
+
+ if(error){
+  alert('Erro ao editar: '+error.message);
+  return;
+ }
+
+ alert('Contagem atualizada!');
+ await historico();
+}
+
+async function excluirContagem(id){
+ if(!confirm('Deseja realmente excluir esta passagem?'))return;
+
+ const {error}=await db.from('count_entries')
+ .delete()
+ .eq('id',id)
+ .eq('user_id',usuarioAtual.id);
+
+ if(error){
+  alert('Erro ao excluir: '+error.message);
+  return;
+ }
+
+ alert('Passagem excluída!');
+ await historico();
+}
+ 
 
 async function sair(){
  if(db)await db.auth.signOut();
