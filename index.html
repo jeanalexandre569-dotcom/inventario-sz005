@@ -45,8 +45,10 @@ button{background:#1457a6;color:white;border:0;font-weight:bold}
 
 <div class="card">
 <h3>Registrar contagem física</h3>
-<input id="busca" placeholder="Buscar por código ou descrição" oninput="buscar()">
+<h4>Escolha um produto da lista</h4>
+<input id="busca" placeholder="Filtrar produtos (opcional)" oninput="buscar()">
 <div id="resultados"></div>
+<button onclick="mostrarTodos()">Ver todos os produtos</button>
 <p id="selecionado"></p>
 <input id="quantidade" type="number" min="0" step="any" placeholder="Quantidade contada">
 <input id="observacao" placeholder="Observação (opcional)">
@@ -119,7 +121,26 @@ function buscar(){
  </div>`).join('');
  if(!encontrados.length)lista.textContent='Nenhum produto encontrado.';
 }
+function mostrarTodos(){
+ const lista=document.getElementById('resultados');
+ const termo=document.getElementById('busca').value.toLowerCase().trim();
 
+ const encontrados=produtos.filter(p=>
+ String(p.code).toLowerCase().includes(termo) ||
+ String(p.description).toLowerCase().includes(termo)
+ );
+
+ lista.innerHTML=encontrados.map(p=>
+ `<div class="item" onclick="selecionarProduto(${Number(p.id)})">
+ <b>${escapar(p.code)}</b> - ${escapar(p.description)}
+ <div class="small">Saldo do sistema: ${escapar(p.system_quantity)}</div>
+ </div>`
+ ).join('');
+
+ if(!encontrados.length){
+ lista.textContent='Nenhum produto encontrado.';
+ }
+}
 function selecionarProduto(id){
  produtoEscolhido=produtos.find(p=>Number(p.id)===id);
  if(!produtoEscolhido)return;
