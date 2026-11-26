@@ -6,88 +6,180 @@
 <title>INVENTÁRIO SZ005</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
-body{font-family:Arial;background:#f1f5f9;margin:0;padding:20px;color:#172033}
+body{font-family:Arial;background:#eef2f7;color:#172033;margin:0;padding:15px}
 main{max-width:700px;margin:auto}
-.card{background:white;padding:20px;border-radius:12px;margin:15px 0}
-input,button{box-sizing:border-box;width:100%;padding:13px;margin:7px 0;border-radius:7px;border:1px solid #ccc}
+.card{background:white;padding:16px;border-radius:12px;margin:12px 0;box-shadow:0 2px 8px #0001}
+h1{color:#1457a6;text-align:center}
+input,button{box-sizing:border-box;width:100%;padding:13px;margin:6px 0;border:1px solid #ccc;border-radius:7px;font-size:16px}
 button{background:#1457a6;color:white;border:0;font-weight:bold}
-h1{color:#1457a6}
+.item{padding:12px;border-bottom:1px solid #ddd;cursor:pointer}
+.small{color:#64748b;font-size:13px}
+#app{display:none}
 </style>
 </head>
 <body>
 <main>
 <h1>INVENTÁRIO SZ005</h1>
+
 <div class="card">
-<h3>Configuração Supabase</h3>
+<h3>Conexão Supabase</h3>
 <input id="url" placeholder="Project URL">
 <input id="key" placeholder="Publishable key">
 <button onclick="conectar()">Conectar</button>
-<p id="status"></p>
+<p id="status" class="small"></p>
 </div>
-<div class="card">
+
+<div class="card" id="login">
 <h3>Login do funcionário</h3>
 <input id="email" type="email" placeholder="E-mail">
 <input id="senha" type="password" placeholder="Senha">
 <button onclick="entrar()">Entrar</button>
-<button onclick="sair()">Sair</button>
-<p id="usuario"></p>
+<p id="loginStatus"></p>
 </div>
+
+<div id="app">
 <div class="card">
-<h3>Produtos cadastrados</h3>
-<button onclick="carregar()">Carregar produtos</button>
-<p id="total">Aguardando conexão...</p>
-<div id="produtos"></div>
+<p id="usuario"></p>
+<button onclick="sair()">Sair</button>
+</div>
+
+<div class="card">
+<h3>Registrar contagem física</h3>
+<input id="busca" placeholder="Buscar por código ou descrição" oninput="buscar()">
+<div id="resultados"></div>
+<p id="selecionado"></p>
+<input id="quantidade" type="number" min="0" step="any" placeholder="Quantidade contada">
+<input id="observacao" placeholder="Observação (opcional)">
+<button onclick="salvarContagem()">Salvar contagem</button>
+<p id="mensagem"></p>
+</div>
+
+<div class="card">
+<h3>Minhas últimas contagens</h3>
+<button onclick="historico()">Atualizar histórico</button>
+<div id="historico"></div>
+</div>
 </div>
 </main>
+
 <script>
-let db=null;
+let db=null, produtos=[], produtoEscolhido=null, usuarioAtual=null;
 
 function conectar(){
  const url=document.getElementById('url').value.trim();
  const key=document.getElementById('key').value.trim();
- if(!url||!key){alert('Preencha os dois campos');return;}
+ if(!url||!key){alert('Preencha a URL e a chave publicável.');return;}
  db=supabase.createClient(url,key);
  localStorage.setItem('sz_url',url);
  localStorage.setItem('sz_key',key);
- document.getElementById('status').textContent='Conexão configurada. Faça login.';
+ document.getElementById('status').textContent='Conexão configurada.';
 }
 
 async function entrar(){
- if(!db){alert('Configure o Supabase primeiro');return;}
- const email=document.getElementById('email').value;
- const senha=document.getElementById('senha').value;
- const {data,error}=await db.auth.signInWithPassword({email,password:senha});
- if(error){alert(error.message);return;}
- document.getElementById('usuario').textContent='Login realizado: '+data.user.email;
- carregar();
+ if(!db){alert('Configure a conexão primeiro.');return;}
+ const email=document.getElementById('email').value.trim();
+ const password=document.getElementById('senha').value;
+ const {data,error}=await db.auth.signInWithPassword({email,password});
+ if(error){document.getElementById('loginStatus').textContent=error.message;return;}
+ usuarioAtual=data.user;
+ document.getElementById('login').style.display='none';
+ document.getElementById('app').style.display='block';
+ document.getElementById('usuario').textContent='Funcionário: '+data.user.email;
+ await carregarProdutos();
+ await historico();
+}
+
+async function carregarProdutos(){
+ const {data,error}=await db.from('products')
+ .select('id,code,description,system_quantity')
+ .eq('active',true).order('code');
+ if(error){alert('Erro ao carregar produtos: '+error.message);return;}
+ produtos=data||[];
+ document.getElementById('mensagem').textContent=produtos.length+' produtos carregados.';
+}
+
+function escapar(valor){
+ return String(valor??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function buscar(){
+ const termo=document.getElementById('busca').value.toLowerCase().trim();
+ const lista=document.getElementById('resultados');
+ produtoEscolhido=null;
+ document.getElementById('selecionado').textContent='';
+ if(!termo){lista.innerHTML='';return;}
+ const encontrados=produtos.filter(p=>
+ String(p.code).toLowerCase().includes(termo)||
+ String(p.description).toLowerCase().includes(termo)
+ ).slice(0,30);
+ lista.innerHTML=encontrados.map((p,i)=>
+ `<div class="item" onclick="selecionarProduto(${Number(p.id)})">
+ <b>${escapar(p.code)}</b> - ${escapar(p.description)}
+ <div class="small">Saldo do sistema: ${escapar(p.system_quantity)}</div>
+ </div>`).join('');
+ if(!encontrados.length)lista.textContent='Nenhum produto encontrado.';
+}
+
+function selecionarProduto(id){
+ produtoEscolhido=produtos.find(p=>Number(p.id)===id);
+ if(!produtoEscolhido)return;
+ document.getElementById('selecionado').textContent=
+ 'Selecionado: '+produtoEscolhido.code+' - '+produtoEscolhido.description+
+ ' | Saldo sistema: '+produtoEscolhido.system_quantity;
+ document.getElementById('resultados').innerHTML='';
+}
+
+async function salvarContagem(){
+ if(!produtoEscolhido){alert('Escolha um produto primeiro.');return;}
+ const campo=document.getElementById('quantidade');
+ if(campo.value===''||Number(campo.value)<0){alert('Informe uma quantidade válida.');return;}
+ const registro={
+ product_id:produtoEscolhido.id,
+ user_id:usuarioAtual.id,
+ counted_qty:Number(campo.value),
+ note:document.getElementById('observacao').value.trim()||null
+ };
+ const {error}=await db.from('count_entries').insert(registro);
+ if(error){alert('Não foi possível salvar: '+error.message);return;}
+ document.getElementById('mensagem').textContent='Contagem salva com sucesso!';
+ campo.value='';
+ document.getElementById('observacao').value='';
+ document.getElementById('busca').value='';
+ document.getElementById('selecionado').textContent='';
+ document.getElementById('resultados').innerHTML='';
+ produtoEscolhido=null;
+ await historico();
+}
+
+async function historico(){
+ const area=document.getElementById('historico');
+ const {data,error}=await db.from('count_entries')
+ .select('counted_qty,note,created_at,products(code,description)')
+ .eq('user_id',usuarioAtual.id)
+ .order('created_at',{ascending:false}).limit(20);
+ if(error){area.textContent='Erro ao carregar histórico: '+error.message;return;}
+ if(!data.length){area.textContent='Nenhuma contagem registrada ainda.';return;}
+ area.innerHTML=data.map(c=>
+ `<div class="item"><b>${escapar(c.products?.code)}</b> - ${escapar(c.products?.description)}
+ <br>Contado: ${escapar(c.counted_qty)}
+ <br><span class="small">${new Date(c.created_at).toLocaleString('pt-BR')}</span>
+ ${c.note?'<br>Obs.: '+escapar(c.note):''}</div>`
+ ).join('');
 }
 
 async function sair(){
- if(!db)return;
- await db.auth.signOut();
- document.getElementById('usuario').textContent='Sessão encerrada';
-}
-
-async function carregar(){
- if(!db){alert('Configure o Supabase primeiro');return;}
- const {data,error}=await db.from('products')
- .select('code,description,system_quantity')
- .eq('active',true).order('code');
- if(error){alert('Erro: '+error.message);return;}
- document.getElementById('total').textContent=data.length+' produtos carregados';
- document.getElementById('produtos').innerHTML=data.map(p=>
- '<p><b>'+p.code+'</b> - '+p.description+
- ' | Saldo: '+p.system_quantity+'</p>'
- ).join('');
+ if(db)await db.auth.signOut();
+ usuarioAtual=null;
+ document.getElementById('app').style.display='none';
+ document.getElementById('login').style.display='block';
+ document.getElementById('senha').value='';
 }
 
 window.addEventListener('load',()=>{
  const url=localStorage.getItem('sz_url');
  const key=localStorage.getItem('sz_key');
- if(url&&key){
- document.getElementById('url').value=url;
- document.getElementById('key').value=key;
- }
+ if(url)document.getElementById('url').value=url;
+ if(key)document.getElementById('key').value=key;
 });
 </script>
 </body>
