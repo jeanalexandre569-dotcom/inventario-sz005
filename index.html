@@ -174,17 +174,46 @@ async function salvarContagem(){
 
 async function historico(){
  const area=document.getElementById('historico');
+
  const {data,error}=await db.from('count_entries')
- .select('counted_qty,note,created_at,products(code,description)')
+ .select('product_id,counted_qty,note,created_at,products(code,description)')
  .eq('user_id',usuarioAtual.id)
- .order('created_at',{ascending:false}).limit(20);
- if(error){area.textContent='Erro ao carregar histórico: '+error.message;return;}
- if(!data.length){area.textContent='Nenhuma contagem registrada ainda.';return;}
- area.innerHTML=data.map(c=>
- `<div class="item"><b>${escapar(c.products?.code)}</b> - ${escapar(c.products?.description)}
- <br>Contado: ${escapar(c.counted_qty)}
- <br><span class="small">${new Date(c.created_at).toLocaleString('pt-BR')}</span>
- ${c.note?'<br>Obs.: '+escapar(c.note):''}</div>`
+ .order('created_at',{ascending:false});
+
+ if(error){
+ area.textContent='Erro: '+error.message;
+ return;
+ }
+
+ if(!data.length){
+ area.textContent='Nenhuma contagem registrada.';
+ return;
+ }
+
+ const grupos={};
+
+ data.forEach(c=>{
+ const id=c.product_id;
+
+ if(!grupos[id]){
+ grupos[id]={
+ code:c.products?.code,
+ description:c.products?.description,
+ total:0,
+ passagens:0
+ };
+ }
+
+ grupos[id].total+=Number(c.counted_qty);
+ grupos[id].passagens++;
+ });
+
+ area.innerHTML=Object.values(grupos).map(p=>
+ `<div class="item">
+ <b>${escapar(p.code)}</b> - ${escapar(p.description)}
+ <br><b>Total acumulado: ${p.total}</b>
+ <br><span class="small">${p.passagens} passagem(ns)</span>
+ </div>`
  ).join('');
 }
 
