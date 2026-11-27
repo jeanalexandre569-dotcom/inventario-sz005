@@ -293,6 +293,7 @@ async function excluirContagem(id){
  await historico();
 }
  
+
 async function carregarPainelAdmin(){
  const area=document.getElementById('resumoAdmin');
  area.textContent='Carregando contagens...';
@@ -316,9 +317,23 @@ async function carregarPainelAdmin(){
   return;
  }
 
+ const {data:aprovacoes,error:erroAprovacoes}=await db
+  .from('product_reviews')
+  .select('product_id,approved_qty,approved_by,approved_at');
+
+ if(erroAprovacoes){
+  area.textContent='Erro ao carregar aprovações: '+erroAprovacoes.message;
+  return;
+ }
+
  const nomes={};
  (perfis||[]).forEach(p=>{
   nomes[p.id]=p.full_name||'Nome não cadastrado';
+ });
+
+ const aprovadas={};
+ (aprovacoes||[]).forEach(a=>{
+  aprovadas[a.product_id]=a;
  });
 
  if(!contagens?.length){
@@ -333,6 +348,7 @@ async function carregarPainelAdmin(){
 
   if(!grupos[id]){
    grupos[id]={
+    id:id,
     code:c.products?.code||'',
     description:c.products?.description||'',
     system:Number(c.products?.system_quantity||0),
@@ -347,13 +363,25 @@ async function carregarPainelAdmin(){
 
  area.innerHTML=Object.values(grupos).map(p=>{
   const diferenca=p.total-p.system;
+  const aprovacao=aprovadas[p.id];
 
   return `<div class="item">
    <b>${escapar(p.code)}</b> - ${escapar(p.description)}
    <br>Saldo Infor: <b>${p.system}</b>
    <br>Total contado: <b>${p.total}</b>
    <br>Diferença: <b>${diferenca}</b>
-   <br>Passagens: ${p.passagens.length}
+   <br>
+   ${aprovacao
+    ? `<b>APROVADO: ${aprovacao.approved_qty}</b>
+       <br>Por: ${escapar(nomes[aprovacao.approved_by]||'Administrador')}
+       <br>Data: ${new Date(aprovacao.approved_at).toLocaleString('pt-BR')}`
+    : '<b>PENDENTE DE APROVAÇÃO</b>'}
+   <br>
+   <button onclick="aprovarProduto(${Number(p.id)},${p.total})">
+    ${aprovacao?'Atualizar aprovação':'Aprovar quantidade'}
+   </button>
+   <br><br>
+   Passagens: ${p.passagens.length}
    ${p.passagens.map(c=>`
     <div style="border-top:1px solid #ccc;margin-top:8px;padding-top:8px">
      Funcionário: <b>${escapar(nomes[c.user_id]||'Não identificado')}</b>
@@ -364,6 +392,28 @@ async function carregarPainelAdmin(){
   </div>`;
  }).join('');
 }
+
+async function aprovarProduto(productId,quantidade){
+ if(!confirm('Confirmar aprovação da quantidade total de '+quantidade+' unidades?'))return;
+
+ const {error}=await db
+  .from('product_reviews')
+  .upsert({
+   product_id:productId,
+   approved_qty:quantidade,
+   approved_by:usuarioAtual.id,
+   approved_at:new Date().toISOString()
+  },{onConflict:'product_id'});
+
+ if(error){
+  alert('Erro ao aprovar: '+error.message);
+  return;
+ }
+
+ alert('Quantidade aprovada com sucesso!');
+ await carregarPainelAdmin();
+}
+  
  
 
 async function sair(){
