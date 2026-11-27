@@ -234,22 +234,35 @@ async function historico(){
   grupos[id].passagens.push(c);
  });
 
- area.innerHTML=Object.values(grupos).map(p=>
-  `<div class="item">
-   <b>${escapar(p.code)}</b> - ${escapar(p.description)}
-   <br><b>Total acumulado: ${p.total}</b>
-   <br><span class="small">${p.passagens.length} passagem(ns)</span>
-   ${p.passagens.map(c=>`
-    <div style="border-top:1px solid #ccc;margin-top:8px;padding-top:8px">
-     Quantidade: <b>${c.counted_qty}</b>
-     <br><span class="small">${new Date(c.created_at).toLocaleString('pt-BR')}</span>
-     <br>
-     <button onclick="editarContagem(${c.id},${Number(c.counted_qty)})">Editar</button>
-     <button onclick="excluirContagem(${c.id})">Excluir</button>
-    </div>
-   `).join('')}
-  </div>`
- ).join('');
+ area.innerHTML=Object.values(grupos).map(p=>{
+ const diferenca=p.total-p.system;
+ const aprovacao=aprovadas[p.id];
+
+ return `<div class="item">
+  <b>${escapar(p.code)}</b> - ${escapar(p.description)}
+  <br>Saldo Infor: <b>${p.system}</b>
+  <br>Total contado: <b>${p.total}</b>
+  <br>Diferença: <b>${diferenca}</b>
+  <br>Saldo oficial aprovado:
+  <b>${aprovacao?aprovacao.approved_qty:'Ainda não aprovado'}</b>
+  <br>
+  ${aprovacao
+   ? '<b>PRODUTO APROVADO</b>'
+   : '<b>PENDENTE DE APROVAÇÃO</b>'}
+  <br>
+  <button onclick="aprovarProduto(${Number(p.id)},${p.total})">
+   ${aprovacao?'Atualizar aprovação':'Aprovar quantidade'}
+  </button>
+  <br><br>
+  Passagens: ${p.passagens.length}
+  ${p.passagens.map(c=>`
+   <div style="border-top:1px solid #ccc;margin-top:8px;padding-top:8px">
+    Quantidade: <b>${c.counted_qty}</b>
+    <br><span class="small">${new Date(c.created_at).toLocaleString('pt-BR')}</span>
+   </div>
+  `).join('')}
+ </div>`;
+}).join('');
 }
 
 async function editarContagem(id,quantidadeAtual){
