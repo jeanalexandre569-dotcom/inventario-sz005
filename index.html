@@ -512,28 +512,28 @@ async function carregarVendasPendentes(){
 }
 
 async function avancarSeparacao(id,status){
- if(status==='aguardando'){
+ if(status==='pendente'){
   const nome=prompt('Digite o nome do separador:');
   if(!nome||!nome.trim())return;
 
   const {error}=await db.from('pending_sales').update({
-   status:'iniciada',
+   status:'separando',
    picker_name:nome.trim(),
    started_at:new Date().toISOString()
   }).eq('id',id);
 
-  if(error){alert(error.message);return;}
+  if(error){alert('Erro ao iniciar: '+error.message);return;}
  }
 
- else if(status==='iniciada'){
+ else if(status==='separando'){
   if(!confirm('Finalizar esta separação?'))return;
 
   const {error}=await db.from('pending_sales').update({
-   status:'finalizada',
+   status:'separado',
    finished_at:new Date().toISOString()
   }).eq('id',id);
 
-  if(error){alert(error.message);return;}
+  if(error){alert('Erro ao finalizar: '+error.message);return;}
  }
 
  await carregarVendasPendentes();
