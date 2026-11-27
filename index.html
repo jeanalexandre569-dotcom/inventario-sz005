@@ -446,7 +446,98 @@ async function sair(){
  document.getElementById('login').style.display='block';
  document.getElementById('senha').value='';
 }
+async function carregarVendasPendentes(){
+ const lista=document.getElementById('listaVendasPendentes');
+ lista.innerHTML='Carregando pedidos...';
 
+ const {data,error}=await db
+  .from('pending_sales')
+  .select('*')
+  .order('created_at',{ascending:false});
+
+ if(error){
+  lista.innerHTML='Erro: '+error.message;
+  return;
+ }
+
+ const busca=document.getElementById('buscarPedido').value.toLowerCase();
+
+ const vendas=data.filter(v=>
+  (v.order_number||'').toLowerCase().includes(busca) ||
+  (v.product_code||'').toLowerCase().includes(busca)
+ );
+
+ if(!vendas.length){
+  lista.innerHTML='Nenhuma venda pendente encontrada.';
+  return;
+ }
+
+ lista.innerHTML=vendas.map(v=>{
+  const status=v.status||'aguardando';
+
+  const cores={
+   aguardando:'#ffffff',
+   iniciada:'#ffcc33',
+   finalizada:'#32b768'
+  };
+
+  const textos={
+   aguardando:'AGUARDANDO SEPARAÇÃO',
+   iniciada:'SEPARAÇÃO INICIADA',
+   finalizada:'SEPARAÇÃO FINALIZADA'
+  };
+
+  let tempo='';
+  if(v.started_at){
+   const inicio=new Date(v.started_at);
+   const fim=v.finished_at?new Date(v.finished_at):new Date();
+   const minutos=Math.floor((fim-inicio)/60000);
+   tempo=`${minutos} minuto(s)`;
+  }
+
+  return `
+   <div class="item" style="border:1px solid #ccc;padding:12px;margin:10px 0;border-radius:8px">
+    <b>Pedido:</b> ${v.order_number||''}<br>
+    <b>Código:</b> ${v.product_code||''}<br>
+    <b>Produto:</b> ${v.description||''}<br>
+    <b>Quantidade:</b> ${v.quantity||0}<br>
+    <b>Separador:</b> ${v.picker_name||'Não definido'}<br>
+    <b>Tempo:</b> ${tempo||'Não iniciado'}<br>
+    <button style="background:${cores[status]};color:#222;font-weight:bold"
+     onclick="avancarSeparacao(${v.id},'${status}')">
+     ${textos[status]||textos.aguardando}
+    </button>
+   </div>`;
+ }).join('');
+}
+
+async function avancarSeparacao(id,status){
+ if(status==='aguardando'){
+  const nome=prompt('Digite o nome do separador:');
+  if(!nome||!nome.trim())return;
+
+  const {error}=await db.from('pending_sales').update({
+   status:'iniciada',
+   picker_name:nome.trim(),
+   started_at:new Date().toISOString()
+  }).eq('id',id);
+
+  if(error){alert(error.message);return;}
+ }
+
+ else if(status==='iniciada'){
+  if(!confirm('Finalizar esta separação?'))return;
+
+  const {error}=await db.from('pending_sales').update({
+   status:'finalizada',
+   finished_at:new Date().toISOString()
+  }).eq('id',id);
+
+  if(error){alert(error.message);return;}
+ }
+
+ await carregarVendasPendentes();
+}
 window.addEventListener('load',()=>{
  const url=localStorage.getItem('sz_url');
  const key=localStorage.getItem('sz_key');
