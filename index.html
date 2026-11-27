@@ -473,19 +473,21 @@ async function carregarVendasPendentes(){
  }
 
  lista.innerHTML=vendas.map(v=>{
-  const status=v.status||'aguardando';
+  const status=v.status||'pendente';
 
   const cores={
-   aguardando:'#ffffff',
-   iniciada:'#ffcc33',
-   finalizada:'#32b768'
-  };
+ pendente:'#ffffff',
+ separando:'#ffcc33',
+ separado:'#32b768',
+ cancelado:'#dddddd'
+};
 
   const textos={
-   aguardando:'AGUARDANDO SEPARAÇÃO',
-   iniciada:'SEPARAÇÃO INICIADA',
-   finalizada:'SEPARAÇÃO FINALIZADA'
-  };
+ pendente:'AGUARDANDO SEPARAÇÃO',
+ separando:'SEPARAÇÃO INICIADA',
+ separado:'SEPARAÇÃO FINALIZADA',
+ cancelado:'PEDIDO CANCELADO'
+};
 
   let tempo='';
   if(v.started_at){
