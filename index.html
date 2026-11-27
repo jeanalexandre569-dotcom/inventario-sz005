@@ -43,6 +43,13 @@ button{background:#1457a6;color:white;border:0;font-weight:bold}
 <button onclick="sair()">Sair</button>
 </div>
 
+<div class="card" id="painelAdmin" style="display:none">
+  <h2>PAINEL DO ADMINISTRADOR</h2>
+  <p>Visão geral das contagens dos funcionários</p>
+  <button onclick="carregarPainelAdmin()">Atualizar contagens</button>
+  <div id="resumoAdmin"></div>
+</div>
+ 
 <div class="card">
 <h3>Registrar contagem física</h3>
 <h4>Escolha um produto da lista</h4>
@@ -84,6 +91,24 @@ async function entrar(){
  const {data,error}=await db.auth.signInWithPassword({email,password});
  if(error){document.getElementById('loginStatus').textContent=error.message;return;}
  usuarioAtual=data.user;
+ 
+const {data:perfil,error:erroPerfil}=await db
+ .from('profiles')
+ .select('full_name,role')
+ .eq('id',data.user.id)
+ .maybeSingle();
+
+if(erroPerfil){
+ alert('Erro ao consultar perfil: '+erroPerfil.message);
+ return;
+}
+
+if(perfil?.role==='admin'){
+ document.getElementById('painelAdmin').style.display='block';
+}else{
+ document.getElementById('painelAdmin').style.display='none';
+}
+ 
  document.getElementById('login').style.display='none';
  document.getElementById('app').style.display='block';
  document.getElementById('usuario').textContent='Funcionário: '+data.user.email;
@@ -266,6 +291,78 @@ async function excluirContagem(id){
 
  alert('Passagem excluída!');
  await historico();
+}
+ 
+async function carregarPainelAdmin(){
+ const area=document.getElementById('resumoAdmin');
+ area.textContent='Carregando contagens...';
+
+ const {data:contagens,error}=await db
+  .from('count_entries')
+  .select('id,user_id,product_id,counted_qty,created_at,products(code,description,system_quantity)')
+  .order('created_at',{ascending:false});
+
+ if(error){
+  area.textContent='Erro ao carregar contagens: '+error.message;
+  return;
+ }
+
+ const {data:perfis,error:erroPerfis}=await db
+  .from('profiles')
+  .select('id,full_name');
+
+ if(erroPerfis){
+  area.textContent='Erro ao carregar funcionários: '+erroPerfis.message;
+  return;
+ }
+
+ const nomes={};
+ (perfis||[]).forEach(p=>{
+  nomes[p.id]=p.full_name||'Nome não cadastrado';
+ });
+
+ if(!contagens?.length){
+  area.textContent='Nenhuma contagem registrada.';
+  return;
+ }
+
+ const grupos={};
+
+ contagens.forEach(c=>{
+  const id=c.product_id;
+
+  if(!grupos[id]){
+   grupos[id]={
+    code:c.products?.code||'',
+    description:c.products?.description||'',
+    system:Number(c.products?.system_quantity||0),
+    total:0,
+    passagens:[]
+   };
+  }
+
+  grupos[id].total+=Number(c.counted_qty);
+  grupos[id].passagens.push(c);
+ });
+
+ area.innerHTML=Object.values(grupos).map(p=>{
+  const diferenca=p.total-p.system;
+
+  return `<div class="item">
+   <b>${escapar(p.code)}</b> - ${escapar(p.description)}
+   <br>Saldo Infor: <b>${p.system}</b>
+   <br>Total contado: <b>${p.total}</b>
+   <br>Diferença: <b>${diferenca}</b>
+   <br>Passagens: ${p.passagens.length}
+   ${p.passagens.map(c=>`
+    <div style="border-top:1px solid #ccc;margin-top:8px;padding-top:8px">
+     Funcionário: <b>${escapar(nomes[c.user_id]||'Não identificado')}</b>
+     <br>Quantidade: ${Number(c.counted_qty)}
+     <br>Data: ${new Date(c.created_at).toLocaleString('pt-BR')}
+    </div>
+   `).join('')}
+  </div>`;
+ }).join('');
 }
  
 
